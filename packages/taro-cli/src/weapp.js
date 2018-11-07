@@ -91,6 +91,7 @@ function getExactedNpmFilePath (npmName, filePath) {
     } else {
       if (!weappNpmConfig.dir) {
         outputNpmPath = npmInfoMainPath.replace(NODE_MODULES, path.join(outputDirName, weappNpmConfig.name))
+        outputNpmPath = outputNpmPath.replace(/node_modules/g, weappNpmConfig.name)
       } else {
         const npmFilePath = npmInfoMainPath.replace(NODE_MODULES_REG, '')
         outputNpmPath = path.join(path.resolve(configDir, '..', weappNpmConfig.dir), weappNpmConfig.name, npmFilePath)
@@ -204,7 +205,11 @@ function analyzeImportUrl ({ astPath, value, depComponents, sourceFilePath, file
         }
 
         if (defaultSpecifier) {
-          astPath.replaceWith(t.variableDeclaration('const', [t.variableDeclarator(t.identifier(defaultSpecifier), t.stringLiteral(vpath.replace(sourceDirPath, '').replace(/\\/g, '/')))]))
+          if (buildAdapter === Util.BUILD_TYPES.SWAN) {
+            astPath.replaceWith(t.variableDeclaration('const', [t.variableDeclarator(t.identifier(defaultSpecifier), t.stringLiteral(Util.promoteRelativePath(path.relative(sourceFilePath, vpath)).replace(/\\/g, '/')))]))
+          } else {
+            astPath.replaceWith(t.variableDeclaration('const', [t.variableDeclarator(t.identifier(defaultSpecifier), t.stringLiteral(vpath.replace(sourceDirPath, '').replace(/\\/g, '/')))]))
+          }
         } else {
           astPath.remove()
         }
@@ -266,7 +271,7 @@ function parseAst (type, ast, depComponents, sourceFilePath, filePath, npmSkip =
   }, Util.generateEnvList(projectConfig.env || {}), Util.generateConstantsList(projectConfig.defineConstants || {}))
   ast = babel.transformFromAst(ast, '', {
     plugins: [
-      [require('babel-plugin-danger-remove-unused-import-taro'), { ignore: ['@tarojs/taro', 'react', 'nervjs'] }],
+      [require('babel-plugin-danger-remove-unused-import'), { ignore: ['@tarojs/taro', 'react', 'nervjs'] }],
       [require('babel-plugin-transform-define').default, constantsReplaceList]
     ]
   }).ast
@@ -614,7 +619,11 @@ function parseAst (type, ast, depComponents, sourceFilePath, filePath, npmSkip =
                     if (NODE_MODULES_REG.test(vpath)) {
                       sourceDirPath = nodeModulesPath
                     }
-                    astPath.replaceWith(t.stringLiteral(vpath.replace(sourceDirPath, '').replace(/\\/g, '/')))
+                    if (buildAdapter === Util.BUILD_TYPES.SWAN) {
+                      astPath.replaceWith(t.stringLiteral(Util.promoteRelativePath(path.relative(sourceFilePath, vpath)).replace(/\\/g, '/')))
+                    } else {
+                      astPath.replaceWith(t.stringLiteral(vpath.replace(sourceDirPath, '').replace(/\\/g, '/')))
+                    }
                   } else {
                     let vpath = Util.resolveScriptPath(path.resolve(sourceFilePath, '..', value))
                     let outputVpath
